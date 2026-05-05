@@ -1,0 +1,22 @@
+# Environment & secrets
+.env
+
+# Cookies (contains session tokens)
+cookies.json
+
+# Check-in status
+checkin_status.json
+
+# Logs
+logfile.log
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/

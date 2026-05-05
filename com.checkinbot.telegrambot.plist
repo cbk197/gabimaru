@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.checkin_misa_bot.telebot</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/chuankieu/workspace/solo_checkin_bot/venv/bin/python3</string>
+        <string>/Users/chuankieu/workspace/solo_checkin_bot/checkin_misa_bot.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/chuankieu/workspace/solo_checkin_bot/</string>
+    <key>StandardOutPath</key>
+    <string>/Users/chuankieu/workspace/solo_checkin_bot/logfile.log</string>
+    <key>StandardErrorPath</key>
+    <string>/dev/null</string>
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>
