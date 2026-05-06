@@ -188,7 +188,7 @@ def perform_misa_checkin(lat, lng):
         'Host': 'amisapp.misa.vn',
         'DeviceType': 'Smartphone',
         'AppCode': 'System',
-        'DeviceName': 'iPad Pro (12.9-inch) (3rd generation)',
+        'DeviceName': 'iPhone 11 Pro Max',
         'x-culture': x_culture,
         'x-sessionid': x_sessionid,
         'AppVersion': '97.6',
