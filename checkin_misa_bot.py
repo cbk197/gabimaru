@@ -219,7 +219,7 @@ def perform_misa_checkin(lat, lng):
         "TimeZone": "(UTC +07:00) Asia/Ho_Chi_Minh",
         "WorkingShiftID": 14408,
         "GPSName": "Onsite Viettel",
-        "IsMobile": False,
+        "IsMobile": True,
         "ApprovalName": "",
         "ApprovalToID": 0,
         "IsManagerConfirmTimekeeping": False,
