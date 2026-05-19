@@ -209,12 +209,26 @@ def perform_misa_checkin(lat, lng):
         'x-tenantsource': x_tenantsource
     }
 
+    validate_url = 'https://amisapp.misa.vn/APIS/TimekeeperAPI/api/TimeKeepingRemote/validate-working-shift'
+    challenge_token = ""
+    try:
+        validate_res = requests.get(validate_url, headers=headers, cookies=req_cookies, verify=False)
+        if validate_res.status_code == 200:
+            val_data = validate_res.json()
+            if val_data.get("Success"):
+                challenge_token = val_data.get("Data", {}).get("ChallengeToken", "")
+    except Exception as e:
+        logger.warning(f"Failed to get challenge token: {e}")
+    misa_key = "MISA-AMIS-TK-PROD-2025-x9VbN4mK8tL2wPc7YqH5RgF3JzS6aWdE"
+    import base64
+    responseToken = base64.b64encode(f"{challenge_token}_{misa_key}".encode()).decode()
+
     payload = {
         "IsRequireFaceIdentifi": False,
         "Longitude": lng,
         "Latitude": lat,
         "IsGPSFixed": True,
-        "ResponseToken": "",
+        "ResponseToken": responseToken,
         "IsWorkRemote": False,
         "TimeZone": "(UTC +07:00) Asia/Ho_Chi_Minh",
         "WorkingShiftID": 14408,
@@ -223,7 +237,7 @@ def perform_misa_checkin(lat, lng):
         "ApprovalName": "",
         "ApprovalToID": 0,
         "IsManagerConfirmTimekeeping": False,
-        "ChallengeToken": "",
+        "ChallengeToken": challenge_token,
         "Documents": "[]",
         "WorkingShiftName": "Ca hành chính",
         "WorkingShiftCode": "HC"
