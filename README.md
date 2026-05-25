@@ -37,7 +37,7 @@ playwright install chromium
 ```bash
 cp com.checkinbot.telegrambot.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.checkinbot.telegrambot.plist
-launchctl start com.checkin_misa_bot.telebot
+launchctl start com.checkinbot.telegrambot
 ```
 
 **5. Check if running**
@@ -52,7 +52,7 @@ If you update the code, unload and reload the bot using `launchctl`:
 ```bash
 launchctl unload ~/Library/LaunchAgents/com.checkinbot.telegrambot.plist
 launchctl load ~/Library/LaunchAgents/com.checkinbot.telegrambot.plist
-launchctl start com.checkin_misa_bot.telebot
+launchctl start com.checkinbot.telegrambot
 launchctl list | grep tele
 ```
 

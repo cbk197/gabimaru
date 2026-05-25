@@ -3,16 +3,16 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.checkin_misa_bot.telebot</string>
+    <string>com.checkinbot.telegrambot</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/chuankieu/workspace/solo_checkin_bot/venv/bin/python3</string>
-        <string>/Users/chuankieu/workspace/solo_checkin_bot/checkin_misa_bot.py</string>
+        <string>/Users/chuankieu/workspace/gabimaru/venv/bin/python3</string>
+        <string>/Users/chuankieu/workspace/gabimaru/checkin_misa_bot.py</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Users/chuankieu/workspace/solo_checkin_bot/</string>
+    <string>/Users/chuankieu/workspace/gabimaru/</string>
     <key>StandardOutPath</key>
-    <string>/Users/chuankieu/workspace/solo_checkin_bot/logfile.log</string>
+    <string>/dev/null</string>
     <key>StandardErrorPath</key>
     <string>/dev/null</string>
     <key>KeepAlive</key>

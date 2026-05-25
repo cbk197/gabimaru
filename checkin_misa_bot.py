@@ -246,7 +246,7 @@ def perform_misa_checkin(lat, lng):
     try:
         response = requests.post(url, headers=headers, cookies=req_cookies, json=payload, verify=False)
 
-        if response.status_code == 200:
+        if response.status_code == 200 and response.json().get("Success") == True:
             # Save any new cookies returned by the API
             _update_cookies_from_response(response)
             return True, "success"

@@ -46,9 +46,9 @@ cat <<EOF > "$PLIST_FILE"
     <key>WorkingDirectory</key>
     <string>$DIR/</string>
     <key>StandardOutPath</key>
-    <string>$DIR/logfile.log</string>
+    <string>/dev/null</string>
     <key>StandardErrorPath</key>
-    <string>$DIR/logfile.err</string>
+    <string>/dev/null</string>
     <key>KeepAlive</key>
     <true/>
 </dict>
