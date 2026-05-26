@@ -40,6 +40,8 @@ cat <<EOF > "$PLIST_FILE"
     <string>com.checkinbot.telegrambot</string>
     <key>ProgramArguments</key>
     <array>
+        <string>/usr/bin/caffeinate</string>
+        <string>-s</string>
         <string>$DIR/venv/bin/python3</string>
         <string>$DIR/checkin_misa_bot.py</string>
     </array>

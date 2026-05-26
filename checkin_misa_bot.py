@@ -163,7 +163,7 @@ def load_cookies_dict():
     return {c['name']: c['value'] for c in user_cookies_list if isinstance(c, dict) and 'name' in c and 'value' in c}
 
 
-def perform_misa_checkin(lat, lng):
+def perform_misa_checkin(lat, lng, gps_name="Onsite Viettel"):
     """Performs the MISA checkin via direct HTTP request using stored cookies (no browser needed)."""
     cookie_dict = load_cookies_dict()
     if not cookie_dict:
@@ -232,7 +232,7 @@ def perform_misa_checkin(lat, lng):
         "IsWorkRemote": False,
         "TimeZone": "(UTC +07:00) Asia/Ho_Chi_Minh",
         "WorkingShiftID": 14408,
-        "GPSName": "Onsite Viettel",
+        "GPSName": gps_name,
         "IsMobile": True,
         "ApprovalName": "",
         "ApprovalToID": 0,
@@ -335,9 +335,9 @@ def update_checkin_status(context):
         json.dump(checkin_data, f)
         f.truncate()
 
-def handle_checkin(update: Update, context: CallbackContext, latitude, longitude):
+def handle_checkin(update: Update, context: CallbackContext, latitude, longitude, gps_name="Onsite Viettel"):
     """Handles immediate check-in requests."""
-    success, message = perform_misa_checkin(latitude, longitude)
+    success, message = perform_misa_checkin(latitude, longitude, gps_name)
     if success:
         update_checkin_status(context)
         context.bot.send_message(update.message.chat_id, f"MISA Check-in Success: {message}")
@@ -350,19 +350,19 @@ def perform_checkin_callback(context: CallbackContext):
     chat_id = job_context['chat_id']
     lat = job_context['lat']
     lng = job_context['lng']
-    success, message = perform_misa_checkin(lat, lng)
+    gps_name = job_context.get('gps_name', 'Onsite Viettel')
+    success, message = perform_misa_checkin(lat, lng, gps_name)
     if success:
         update_checkin_status(context)
         context.bot.send_message(chat_id, f"Scheduled MISA check-in success! {message}")
     else:
         context.bot.send_message(chat_id, f"Scheduled MISA check-in failed: {message}")
 
-def schedule_checkin(update: Update, context: CallbackContext, hour: int, minute: int):
+def schedule_checkin(update: Update, context: CallbackContext, hour: int, minute: int, center_lat=21.016835297342254, center_lng=105.78426152398515, gps_name="Onsite Viettel"):
     """Schedules a check-in at a specified time."""
     chat_id = update.effective_chat.id
 
-    # Use Viettel base center
-    lat, lng = generate_random_point(21.016835297342254, 105.78426152398515, 50)
+    lat, lng = generate_random_point(center_lat, center_lng, 50)
 
     if not (0 <= hour < 24 and 0 <= minute < 60):
         update.message.reply_text("Invalid time. Hour must be 0-23 and minute must be 0-59.")
@@ -385,7 +385,7 @@ def schedule_checkin(update: Update, context: CallbackContext, hour: int, minute
     context.job_queue.run_once(
         perform_checkin_callback,
         when=time_difference + 7*60,
-        context={'chat_id': chat_id, 'lat': lat, 'lng': lng}
+        context={'chat_id': chat_id, 'lat': lat, 'lng': lng, 'gps_name': gps_name}
     )
     update.message.reply_text(f"MISA check-in scheduled for {scheduled_datetime.strftime('%Y-%m-%d %H:%M:%S')} (Vietnam time).")
 
@@ -415,6 +415,37 @@ def checkin_viettel(update: Update, context: CallbackContext) -> None:
             update.message.reply_text("Invalid time format. Please use /viettel <hour> <minute>, e.g., /viettel 18 30")
     else:
         update.message.reply_text("Too many arguments. Use /viettel, /viettel <hour>, or /viettel <hour> <minute>.")
+
+def checkin_mobi(update: Update, context: CallbackContext) -> None:
+    """Handles Mobifone check-in commands using MISA login flow."""
+    MOBI_CENTER_LAT = 21.019731447886304
+    MOBI_CENTER_LNG = 105.78436007613178
+    MOBI_GPS_NAME = "Onsite Mobifone"
+
+    if len(context.args) == 0:
+        lat, lng = generate_random_point(MOBI_CENTER_LAT, MOBI_CENTER_LNG, 50)
+        handle_checkin(update, context, lat, lng, MOBI_GPS_NAME)
+    elif len(context.args) == 1:
+        try:
+            hour = int(context.args[0])
+            if 0 <= hour < 24:
+                schedule_checkin(update, context, hour, 0, MOBI_CENTER_LAT, MOBI_CENTER_LNG, MOBI_GPS_NAME)
+            else:
+                update.message.reply_text("Hour must be between 0 and 23.")
+        except ValueError:
+            update.message.reply_text("Invalid hour. Please use /mobi <hour>, e.g., /mobi 18")
+    elif len(context.args) == 2:
+        try:
+            hour = int(context.args[0])
+            minute = int(context.args[1])
+            if 0 <= hour < 24 and 0 <= minute < 60:
+                schedule_checkin(update, context, hour, minute, MOBI_CENTER_LAT, MOBI_CENTER_LNG, MOBI_GPS_NAME)
+            else:
+                update.message.reply_text("Invalid time. Hour must be 0-23 and minute must be 0-59.")
+        except ValueError:
+            update.message.reply_text("Invalid time format. Please use /mobi <hour> <minute>, e.g., /mobi 18 30")
+    else:
+        update.message.reply_text("Too many arguments. Use /mobi, /mobi <hour>, or /mobi <hour> <minute>.")
 
 def send_checkin_reminder(context: CallbackContext):
     """Sends reminders for morning and evening check-ins."""
@@ -603,10 +634,14 @@ def help_command(update: Update, context: CallbackContext) -> None:
         "   - `/viettel` - Immediate check-in (direct HTTP, no browser).\n"
         "   - `/viettel <hour>` - Schedule check-in at <hour>:00.\n"
         "   - `/viettel <hour> <minute>` - Schedule check-in at <hour>:<minute>.\n\n"
-        "3. Cookie Management:\n"
+        "3. Check in at Mobifone:\n"
+        "   - `/mobi` - Immediate check-in at Mobifone.\n"
+        "   - `/mobi <hour>` - Schedule check-in at <hour>:00.\n"
+        "   - `/mobi <hour> <minute>` - Schedule check-in at <hour>:<minute>.\n\n"
+        "4. Cookie Management:\n"
         "   - `/refresh` - Manually refresh cookies via browser.\n"
         "   - Cookies auto-refresh daily between 7:00-8:00 AM.\n\n"
-        "4. Reminders are sent at 8:50 and 18:10.\n\n"
+        "5. Reminders are sent at 8:50 and 18:10.\n\n"
         "Questions? Feel free to ask!",
         parse_mode=ParseMode.MARKDOWN
     )
@@ -628,6 +663,7 @@ def main() -> None:
 
     # Command handlers
     dispatcher.add_handler(CommandHandler("viettel", checkin_viettel))
+    dispatcher.add_handler(CommandHandler("mobi", checkin_mobi))
     dispatcher.add_handler(CommandHandler("refresh", refresh_command))
     dispatcher.add_handler(CommandHandler("help", help_command))
     dispatcher.add_handler(CommandHandler("start", start))
