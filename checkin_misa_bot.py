@@ -28,6 +28,7 @@ cookies_lock = threading.RLock()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 COOKIES_PATH = os.path.join(BASE_DIR, 'cookies.json')
 STATUS_PATH = os.path.join(BASE_DIR, 'checkin_status.json')
+ACTIVE_USERS_PATH = os.path.join(BASE_DIR, 'active_users.json')
 
 # --- Utility Functions ---
 
@@ -454,38 +455,58 @@ def send_checkin_reminder(context: CallbackContext):
     today = datetime.now(vn_timezone).weekday()
     if today == 5 or today == 6:  # Skip weekends
         return
-    morning_check_time = time(8, 50, tzinfo=vn_timezone)
-    evening_check_time = time(18, 10, tzinfo=vn_timezone)
+    # Use naive times to match `now` (datetime.time() drops tzinfo); the hours/
+    # minutes are already in VN time so no conversion is needed.
+    morning_check_time = time(8, 50)
+    evening_check_time = time(18, 10)
 
+    # Default to "not checked in" when the status file is missing or unreadable,
+    # so reminders still fire on a fresh day instead of being silently skipped.
+    checkin_data = {}
     if os.path.exists(STATUS_PATH):
         with open(STATUS_PATH, 'r') as f:
             try:
                 checkin_data = json.load(f)
             except json.JSONDecodeError:
                 checkin_data = {}
-            if "morning_checkin" not in checkin_data:
-                return
 
-            morning_checked_in = checkin_data.get("morning_checkin", False)
-            evening_checked_in = checkin_data.get("evening_checkin", False)
-            
-            if 'active_users' in context.bot_data:
-                for user_id in context.bot_data['active_users']:
-                    try:
-                        user_id_int = int(user_id)
-                        if now >= morning_check_time and not morning_checked_in:
-                            context.bot.send_message(user_id_int, "Reminder: Please do morning check-in.")
-                        if now >= evening_check_time and not evening_checked_in:
-                            context.bot.send_message(user_id_int, "Reminder: Please do evening check-in.")
-                    except ValueError:
-                        pass
+    morning_checked_in = checkin_data.get("morning_checkin", False)
+    evening_checked_in = checkin_data.get("evening_checkin", False)
+
+    if 'active_users' in context.bot_data:
+        for user_id in context.bot_data['active_users']:
+            try:
+                user_id_int = int(user_id)
+                if now >= morning_check_time and not morning_checked_in:
+                    context.bot.send_message(user_id_int, "Reminder: Please do morning check-in.")
+                if now >= evening_check_time and not evening_checked_in:
+                    context.bot.send_message(user_id_int, "Reminder: Please do evening check-in.")
+            except ValueError:
+                pass
+
+def load_active_users():
+    """Loads the persisted set of active users from disk."""
+    if os.path.exists(ACTIVE_USERS_PATH):
+        with open(ACTIVE_USERS_PATH, 'r') as f:
+            try:
+                return set(json.load(f))
+            except json.JSONDecodeError:
+                pass
+    return set()
+
+def save_active_users(active_users):
+    """Persists the set of active users to disk."""
+    with open(ACTIVE_USERS_PATH, 'w') as f:
+        json.dump(list(active_users), f)
 
 def track_active_user(update: Update, context: CallbackContext):
     """Tracks active users."""
     user_id = str(update.effective_user.id)
     if 'active_users' not in context.bot_data:
         context.bot_data['active_users'] = set()
-    context.bot_data['active_users'].add(user_id)
+    if user_id not in context.bot_data['active_users']:
+        context.bot_data['active_users'].add(user_id)
+        save_active_users(context.bot_data['active_users'])
 
 def reset_checkin_status():
     """Resets check-in status daily."""
@@ -660,6 +681,10 @@ def main() -> None:
     """Starts the bot."""
     updater = Updater(os.environ["TELEGRAM_BOT_TOKEN"])
     dispatcher = updater.dispatcher
+
+    # Restore active users so reminders still fire after a restart, even before
+    # any user sends a new message.
+    dispatcher.bot_data['active_users'] = load_active_users()
 
     # Command handlers
     dispatcher.add_handler(CommandHandler("viettel", checkin_viettel))
