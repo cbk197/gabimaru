@@ -448,6 +448,37 @@ def checkin_mobi(update: Update, context: CallbackContext) -> None:
     else:
         update.message.reply_text("Too many arguments. Use /mobi, /mobi <hour>, or /mobi <hour> <minute>.")
 
+def checkin_vnpt(update: Update, context: CallbackContext) -> None:
+    """Handles VNPT check-in commands using MISA login flow."""
+    VNPT_CENTER_LAT = 21.01893485945844
+    VNPT_CENTER_LNG = 105.80970278698703
+    VNPT_GPS_NAME = "Onsite VNPT"
+
+    if len(context.args) == 0:
+        lat, lng = generate_random_point(VNPT_CENTER_LAT, VNPT_CENTER_LNG, 50)
+        handle_checkin(update, context, lat, lng, VNPT_GPS_NAME)
+    elif len(context.args) == 1:
+        try:
+            hour = int(context.args[0])
+            if 0 <= hour < 24:
+                schedule_checkin(update, context, hour, 0, VNPT_CENTER_LAT, VNPT_CENTER_LNG, VNPT_GPS_NAME)
+            else:
+                update.message.reply_text("Hour must be between 0 and 23.")
+        except ValueError:
+            update.message.reply_text("Invalid hour. Please use /vnpt <hour>, e.g., /vnpt 18")
+    elif len(context.args) == 2:
+        try:
+            hour = int(context.args[0])
+            minute = int(context.args[1])
+            if 0 <= hour < 24 and 0 <= minute < 60:
+                schedule_checkin(update, context, hour, minute, VNPT_CENTER_LAT, VNPT_CENTER_LNG, VNPT_GPS_NAME)
+            else:
+                update.message.reply_text("Invalid time. Hour must be 0-23 and minute must be 0-59.")
+        except ValueError:
+            update.message.reply_text("Invalid time format. Please use /vnpt <hour> <minute>, e.g., /vnpt 18 30")
+    else:
+        update.message.reply_text("Too many arguments. Use /vnpt, /vnpt <hour>, or /vnpt <hour> <minute>.")
+
 def send_checkin_reminder(context: CallbackContext):
     """Sends reminders for morning and evening check-ins."""
     vn_timezone = pytz.timezone('Asia/Ho_Chi_Minh')
@@ -659,10 +690,14 @@ def help_command(update: Update, context: CallbackContext) -> None:
         "   - `/mobi` - Immediate check-in at Mobifone.\n"
         "   - `/mobi <hour>` - Schedule check-in at <hour>:00.\n"
         "   - `/mobi <hour> <minute>` - Schedule check-in at <hour>:<minute>.\n\n"
-        "4. Cookie Management:\n"
+        "4. Check in at VNPT:\n"
+        "   - `/vnpt` - Immediate check-in at VNPT.\n"
+        "   - `/vnpt <hour>` - Schedule check-in at <hour>:00.\n"
+        "   - `/vnpt <hour> <minute>` - Schedule check-in at <hour>:<minute>.\n\n"
+        "5. Cookie Management:\n"
         "   - `/refresh` - Manually refresh cookies via browser.\n"
         "   - Cookies auto-refresh daily between 7:00-8:00 AM.\n\n"
-        "5. Reminders are sent at 8:50 and 18:10.\n\n"
+        "6. Reminders are sent at 8:50 and 18:10.\n\n"
         "Questions? Feel free to ask!",
         parse_mode=ParseMode.MARKDOWN
     )
@@ -689,6 +724,7 @@ def main() -> None:
     # Command handlers
     dispatcher.add_handler(CommandHandler("viettel", checkin_viettel))
     dispatcher.add_handler(CommandHandler("mobi", checkin_mobi))
+    dispatcher.add_handler(CommandHandler("vnpt", checkin_vnpt))
     dispatcher.add_handler(CommandHandler("refresh", refresh_command))
     dispatcher.add_handler(CommandHandler("help", help_command))
     dispatcher.add_handler(CommandHandler("start", start))
