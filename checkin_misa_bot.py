@@ -649,6 +649,27 @@ def perform_cookie_refresh(context_or_none=None):
         return False, f"Cookie refresh failed: {e}"
 
 
+def perform_firefox_reload():
+    """Reads cookies straight from the Firefox profile and overwrites cookies.json.
+    Returns (success: bool, message: str).
+    """
+    try:
+        firefox_cookies = get_firefox_cookies("amisapp.misa.vn")
+    except Exception as e:
+        logger.error(f"Failed to read cookies from Firefox: {e}")
+        return False, f"Failed to read cookies from Firefox: {e}"
+
+    if not firefox_cookies:
+        return False, "No MISA cookies found in Firefox. Please log in to amisapp.misa.vn on Firefox first."
+
+    with cookies_lock:
+        with open(COOKIES_PATH, 'w', encoding='utf-8') as f:
+            json.dump(firefox_cookies, f, indent=4)
+
+    logger.info(f"Reloaded {len(firefox_cookies)} cookies from Firefox")
+    return True, f"Reloaded {len(firefox_cookies)} cookies from Firefox (cookies.json overwritten)."
+
+
 def perform_cookie_refresh_scheduled(context: CallbackContext):
     """Wrapper for scheduled cookie refresh job (adapts to job_queue signature)."""
     success, message = perform_cookie_refresh()
@@ -676,6 +697,18 @@ def refresh_command(update: Update, context: CallbackContext) -> None:
     except Exception as e:
         update.message.reply_text(f"❌ Cookie refresh error: {e}")
 
+def reload_firefox_command(update: Update, context: CallbackContext) -> None:
+    """Handles /reload_firefox command - reloads cookies from Firefox, overwriting cookies.json."""
+    update.message.reply_text("🦊 Reloading cookies from Firefox...")
+    try:
+        success, message = perform_firefox_reload()
+        if success:
+            update.message.reply_text(f"✅ {message}")
+        else:
+            update.message.reply_text(f"❌ {message}")
+    except Exception as e:
+        update.message.reply_text(f"❌ Firefox reload error: {e}")
+
 def help_command(update: Update, context: CallbackContext) -> None:
     """Displays help information."""
     update.message.reply_text(
@@ -696,6 +729,7 @@ def help_command(update: Update, context: CallbackContext) -> None:
         "   - `/vnpt <hour> <minute>` - Schedule check-in at <hour>:<minute>.\n\n"
         "5. Cookie Management:\n"
         "   - `/refresh` - Manually refresh cookies via browser.\n"
+        "   - `/reload_firefox` - Reload cookies directly from Firefox (overwrites current).\n"
         "   - Cookies auto-refresh daily between 7:00-8:00 AM.\n\n"
         "6. Reminders are sent at 8:50 and 18:10.\n\n"
         "Questions? Feel free to ask!",
@@ -726,6 +760,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("mobi", checkin_mobi))
     dispatcher.add_handler(CommandHandler("vnpt", checkin_vnpt))
     dispatcher.add_handler(CommandHandler("refresh", refresh_command))
+    dispatcher.add_handler(CommandHandler("reload_firefox", reload_firefox_command))
     dispatcher.add_handler(CommandHandler("help", help_command))
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(MessageHandler(Filters.all, track_active_user))
