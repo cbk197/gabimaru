@@ -532,6 +532,8 @@ def save_active_users(active_users):
 
 def track_active_user(update: Update, context: CallbackContext):
     """Tracks active users."""
+    if update.effective_user is None:
+        return
     user_id = str(update.effective_user.id)
     if 'active_users' not in context.bot_data:
         context.bot_data['active_users'] = set()
@@ -755,6 +757,11 @@ def main() -> None:
     # any user sends a new message.
     dispatcher.bot_data['active_users'] = load_active_users()
 
+    # Track users in a separate handler group: within one group only the first
+    # matching handler runs, so a same-group tracker never sees commands — the
+    # CommandHandlers consume them and reminders end up with no recipients.
+    dispatcher.add_handler(MessageHandler(Filters.all, track_active_user), group=-1)
+
     # Command handlers
     dispatcher.add_handler(CommandHandler("viettel", checkin_viettel))
     dispatcher.add_handler(CommandHandler("mobi", checkin_mobi))
@@ -763,7 +770,6 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("reload_firefox", reload_firefox_command))
     dispatcher.add_handler(CommandHandler("help", help_command))
     dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(MessageHandler(Filters.all, track_active_user))
     dispatcher.add_handler(MessageHandler(~Filters.command, echo))
 
     # Job queue scheduling
