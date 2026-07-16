@@ -672,6 +672,156 @@ def perform_firefox_reload():
     return True, f"Reloaded {len(firefox_cookies)} cookies from Firefox (cookies.json overwritten)."
 
 
+def parse_cookie_input(text):
+    """Parses user-provided cookies into the cookies.json list format.
+
+    Accepts either a JSON array of cookie objects, a JSON {name: value} dict,
+    or a Cookie header string like "x-sessionid=abc; x-tenantid=def".
+    Returns a list of cookie dicts, or None if nothing parseable was found.
+    """
+    text = text.strip()
+
+    try:
+        loaded = json.loads(text)
+        if isinstance(loaded, list):
+            cookies = [c for c in loaded if isinstance(c, dict) and c.get('name') and 'value' in c]
+            return cookies or None
+        if isinstance(loaded, dict):
+            return [
+                {"name": k, "value": str(v), "host": "amisapp.misa.vn", "path": "/"}
+                for k, v in loaded.items()
+            ] or None
+    except json.JSONDecodeError:
+        pass
+
+    cookies = []
+    for part in text.split(';'):
+        part = part.strip()
+        if '=' not in part:
+            continue
+        name, _, value = part.partition('=')
+        name = name.strip()
+        if name:
+            cookies.append({"name": name, "value": value.strip(), "host": "amisapp.misa.vn", "path": "/"})
+    return cookies or None
+
+
+def _clear_cached_misa_userid():
+    """Removes the cached MISA user ID so it is re-fetched with the new cookies."""
+    if not os.path.exists(STATUS_PATH):
+        return
+    with open(STATUS_PATH, 'r+', encoding='utf-8') as f:
+        try:
+            status_data = json.load(f)
+        except json.JSONDecodeError:
+            return
+        if isinstance(status_data, dict) and 'misa_userid' in status_data:
+            del status_data['misa_userid']
+            f.seek(0)
+            json.dump(status_data, f, indent=4)
+            f.truncate()
+
+
+# Standalone script the user runs on another Mac to export MISA cookies from
+# Firefox. It prints a ready-to-paste "/set_cookie <json>" line. Kept
+# dependency-free (stdlib only) so it runs on a fresh machine, and free of
+# backticks so it survives being sent inside a Telegram Markdown code block.
+COOKIE_EXPORT_SCRIPT = r'''import sqlite3, shutil, tempfile, json
+from pathlib import Path
+
+DOMAIN = "amisapp.misa.vn"
+root = Path.home() / "Library/Application Support/Firefox/Profiles"
+
+cookies = []
+for profile in (sorted(root.iterdir()) if root.exists() else []):
+    db = profile / "cookies.sqlite"
+    if not db.exists():
+        continue
+    tmp = Path(tempfile.gettempdir()) / "ff_cookies_copy.sqlite"
+    shutil.copy2(db, tmp)
+    conn = sqlite3.connect(tmp)
+    rows = conn.execute(
+        "SELECT host, name, value, path, expiry, isSecure, isHttpOnly "
+        "FROM moz_cookies WHERE host LIKE ?", ("%" + DOMAIN + "%",)
+    ).fetchall()
+    conn.close()
+    if rows:
+        cookies = [
+            {"host": r[0], "name": r[1], "value": r[2], "path": r[3],
+             "expiry": r[4], "secure": bool(r[5]), "httpOnly": bool(r[6])}
+            for r in rows
+        ]
+        break
+
+if not cookies:
+    print("No MISA cookies found in Firefox. Log in to amisapp.misa.vn on Firefox first.")
+else:
+    print("/set_cookie " + json.dumps(cookies, ensure_ascii=False))
+'''
+
+
+def code_export_command(update: Update, context: CallbackContext) -> None:
+    """Handles /code_export command - sends a standalone script the user can run
+    on another Mac to export Firefox cookies and paste back via /set_cookie."""
+    update.message.reply_text(
+        "Run this on the other Mac (Python 3, Firefox logged in to amisapp.misa.vn). "
+        "It prints a `/set_cookie ...` line — copy that whole line and send it to me:",
+        parse_mode=ParseMode.MARKDOWN
+    )
+    update.message.reply_text(
+        "```\n" + COOKIE_EXPORT_SCRIPT + "```",
+        parse_mode=ParseMode.MARKDOWN
+    )
+    update.message.reply_text(
+        "Save it as `export_cookies.py` and run `python3 export_cookies.py`, "
+        "or paste the whole thing into `python3 -`.",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+
+def set_cookie_command(update: Update, context: CallbackContext) -> None:
+    """Handles /set_cookie command - overwrites cookies.json with cookies sent by the user."""
+    # Use the raw message text instead of context.args: cookie strings contain
+    # spaces after semicolons, and args would split them apart.
+    parts = update.message.text.split(None, 1)
+    raw = parts[1].strip() if len(parts) > 1 else ""
+
+    if not raw:
+        update.message.reply_text(
+            "Usage: `/set_cookie <cookies>`\n\n"
+            "Send cookies in one of these formats:\n"
+            "1. Cookie header string:\n"
+            "`/set_cookie x-sessionid=abc; x-tenantid=def; x-deviceid=ghi`\n"
+            "2. JSON array (cookies.json format):\n"
+            '`/set_cookie [{"name": "x-sessionid", "value": "abc"}]`\n\n'
+            "This overwrites the bot's current cookies.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
+    cookies = parse_cookie_input(raw)
+    if not cookies:
+        update.message.reply_text(
+            "❌ Could not parse any cookies. Send them as `name=value; name2=value2` "
+            "or as a JSON array of {name, value} objects.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
+    with cookies_lock:
+        with open(COOKIES_PATH, 'w', encoding='utf-8') as f:
+            json.dump(cookies, f, indent=4)
+
+    # The new session may belong to a different user; force a re-fetch.
+    _clear_cached_misa_userid()
+
+    names = {c['name'] for c in cookies}
+    reply = f"✅ Saved {len(cookies)} cookie(s). Previous cookies were overwritten."
+    if 'x-sessionid' not in names:
+        reply += "\n⚠️ Warning: no `x-sessionid` cookie found — check-ins may fail without it."
+    update.message.reply_text(reply, parse_mode=ParseMode.MARKDOWN)
+
+
 def perform_cookie_refresh_scheduled(context: CallbackContext):
     """Wrapper for scheduled cookie refresh job (adapts to job_queue signature)."""
     success, message = perform_cookie_refresh()
@@ -732,6 +882,10 @@ def help_command(update: Update, context: CallbackContext) -> None:
         "5. Cookie Management:\n"
         "   - `/refresh` - Manually refresh cookies via browser.\n"
         "   - `/reload_firefox` - Reload cookies directly from Firefox (overwrites current).\n"
+        "   - `/set_cookie <cookies>` - Send cookies to the bot to overwrite the current ones\n"
+        "     (accepts `name=value; name2=value2` or a JSON array).\n"
+        "   - `/code_export` - Get a script to export Firefox cookies on another Mac,\n"
+        "     whose output you paste back via `/set_cookie`.\n"
         "   - Cookies auto-refresh daily between 7:00-8:00 AM.\n\n"
         "6. Reminders are sent at 8:50 and 18:10.\n\n"
         "Questions? Feel free to ask!",
@@ -768,6 +922,8 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("vnpt", checkin_vnpt))
     dispatcher.add_handler(CommandHandler("refresh", refresh_command))
     dispatcher.add_handler(CommandHandler("reload_firefox", reload_firefox_command))
+    dispatcher.add_handler(CommandHandler("set_cookie", set_cookie_command))
+    dispatcher.add_handler(CommandHandler("code_export", code_export_command))
     dispatcher.add_handler(CommandHandler("help", help_command))
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(MessageHandler(~Filters.command, echo))
