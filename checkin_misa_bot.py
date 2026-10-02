@@ -902,8 +902,29 @@ def start(update: Update, context: CallbackContext) -> None:
         parse_mode=ParseMode.MARKDOWN
     )
 
+LOG_FILES = [os.path.join(BASE_DIR, 'error.log'), os.path.join(BASE_DIR, 'logfile.log')]
+LOG_MAX_BYTES = 10 * 1024 * 1024
+
+
+def cleanup_log_files(context=None):
+    """Empties any log file over 10MB.
+    Truncates in place instead of deleting: launchd keeps error.log open, so a
+    deleted file would keep receiving writes but be invisible on disk."""
+    for path in LOG_FILES:
+        try:
+            if os.path.getsize(path) > LOG_MAX_BYTES:
+                os.truncate(path, 0)
+                logger.warning(f"Log file {path} exceeded 10MB, cleared it")
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            logger.error(f"Failed to clean up log file {path}: {e}")
+
+
 def main() -> None:
     """Starts the bot."""
+    cleanup_log_files()
+
     updater = Updater(os.environ["TELEGRAM_BOT_TOKEN"])
     dispatcher = updater.dispatcher
 
@@ -934,6 +955,7 @@ def main() -> None:
     updater.job_queue.run_daily(send_checkin_reminder, time=time(8, 50, tzinfo=vn_timezone))
     updater.job_queue.run_daily(send_checkin_reminder, time=time(18, 10, tzinfo=vn_timezone))
     updater.job_queue.run_daily(lambda context: reset_checkin_status(), time=time(0, 0, tzinfo=vn_timezone))
+    updater.job_queue.run_repeating(cleanup_log_files, interval=3600, first=3600)
 
     updater.start_polling()
     updater.idle()

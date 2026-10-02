@@ -56,15 +56,16 @@ def get_firefox_cookies(domain: str) -> list[dict]:
 
 # ── main ───────────────────────────────────────────────────────────────────────
 
-cookies = get_firefox_cookies(domain)
+if __name__ == "__main__":
+    cookies = get_firefox_cookies(domain)
 
-if not cookies:
-    raise RuntimeError(
-        f"No MISA cookies found for '{domain}' in Firefox. "
-        "Please log in to the MISA portal in Firefox first."
-    )
+    if not cookies:
+        raise RuntimeError(
+            f"No MISA cookies found for '{domain}' in Firefox. "
+            "Please log in to the MISA portal in Firefox first."
+        )
 
-with open("cookies.json", "w", encoding="utf-8") as f:
-    json.dump(cookies, f, indent=2)
+    with open("cookies.json", "w", encoding="utf-8") as f:
+        json.dump(cookies, f, indent=2)
 
-print(f"[Firefox] Exported {len(cookies)} cookies to cookies.json")
+    print(f"[Firefox] Exported {len(cookies)} cookies to cookies.json")

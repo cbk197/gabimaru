@@ -45,6 +45,15 @@ launchctl start com.checkinbot.telegrambot
 launchctl list | grep tele
 ```
 
+### Run at Boot (no login needed)
+The LaunchAgent above only starts after you log in. To start the bot at boot instead, run this (after `setup.sh`):
+```bash
+./install_daemon.sh
+```
+This replaces the LaunchAgent with a system LaunchDaemon that runs as your user. With FileVault on, the disk stays locked after a normal reboot until someone enters a password. macOS updates usually unlock it once automatically. For your own restarts, use `sudo fdesetup authrestart`.
+
+Restart the daemon after code changes: `sudo launchctl kickstart -k system/com.checkinbot.telegrambot`
+
 ## Maintenance & Troubleshooting
 
 ### Reloading the Bot
